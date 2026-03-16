@@ -118,8 +118,8 @@ class DiscussionEngine:
             turn += 1
             last_speaker = speaker_name
 
-            # Facilitator warning at turn 10: force compromise
-            if turn == 10:
+            # Facilitator warning at midpoint: force compromise
+            if turn == MAX_TURNS // 2:
                 warning_msg = Message(
                     role=MessageRole.USER,
                     content=(
