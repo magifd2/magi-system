@@ -23,10 +23,12 @@
 
 ```
 議題入力
+  → 各ペルソナにスタンス（推進派・懐疑派・代替案提案派）をランダム割当
+  → ファシリテーターが議題とスタンス一覧を投下
   → ランダムに選ばれた1ペルソナが最初の意見を表明
-  → 他ペルソナが順次応答・反論・同意
+  → 他ペルソナが順次応答・反論・名指しで言及
   → 各ペルソナが会話ごとに感情状態を更新
-  → 2ペルソナ以上が「収束」と判断
+  → 全3ペルソナが「収束」と判断（最低6ターン経過後）
   → 全ペルソナが締めくくりコメントを述べる
   → 最終レポートを生成・保存
 ```
@@ -137,15 +139,25 @@ magi-system/
     └── save.py           # Markdownファイル保存
 ```
 
-## LLMバックエンドの変更
+## 動作パラメータ
 
-`src/magi/llm.py` の先頭定数を編集することで、任意のOpenAI互換エンドポイントに変更できます。
+`src/magi/discussion.py` の定数で議論の挙動を調整できます。
 
-```python
-BASE_URL = "http://localhost:1234/v1"   # LM Studio デフォルト
-API_KEY  = "lm-studio"
-MODEL    = "openai/gpt-oss-20b"
-```
+| 定数 | デフォルト | 説明 |
+|------|-----------|------|
+| `MAX_TURNS` | `50` | 議論の最大ターン数（安全上限） |
+| `CONVERGENCE_THRESHOLD` | `3` | 収束に必要な賛成ペルソナ数 |
+| `MIN_TURNS_BEFORE_CONVERGENCE` | `6` | 収束判定を開始する最低ターン数 |
+
+`src/magi/llm.py` の定数でLLMの挙動を調整できます。
+
+| 定数 | デフォルト | 説明 |
+|------|-----------|------|
+| `BASE_URL` | `http://localhost:1234/v1` | LLMエンドポイント |
+| `API_KEY` | `lm-studio` | APIキー |
+| `MODEL` | `openai/gpt-oss-20b` | 使用モデル |
+
+生成パラメータ（`temperature=0.8`・`presence_penalty=0.6`・`frequency_penalty=0.6`）は `chat_with_persona` 内で設定しています。
 
 ## ライセンス
 
