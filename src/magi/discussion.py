@@ -12,8 +12,8 @@ from magi.persona import ALL_PERSONAS, INITIAL_ROLES, Persona
 
 
 MAX_TURNS = 50
-CONVERGENCE_THRESHOLD = 3  # How many personas must vote True to converge
-MIN_TURNS_BEFORE_CONVERGENCE = 6  # Require at least 2 full rounds before convergence can trigger
+CONVERGENCE_THRESHOLD = 2  # How many personas must vote True to converge
+MIN_TURNS_BEFORE_CONVERGENCE = 10  # Require at least N turns before convergence can trigger
 
 
 def _persona_state_snapshot(persona: Persona) -> PersonaState:
@@ -266,9 +266,7 @@ class DiscussionEngine:
         agreed_recently = {
             m.speaker for m in recent if "【収束に同意】" in m.content
         }
-        # Use THRESHOLD - 1 for the recent-marker check so that a single
-        # non-agreeing turn by one persona doesn't block an otherwise clear consensus.
-        return len(agreed_recently) >= CONVERGENCE_THRESHOLD - 1
+        return len(agreed_recently) >= CONVERGENCE_THRESHOLD
 
     def _build_state(self, topic: str, turn_count: int = 0) -> DiscussionState:
         """Build a DiscussionState snapshot from current engine state."""
