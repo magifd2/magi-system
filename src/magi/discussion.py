@@ -11,8 +11,8 @@ from magi.models import DiscussionState, Message, MessageRole, PersonaState
 from magi.persona import ALL_PERSONAS, INITIAL_ROLES, Persona
 
 
-MAX_TURNS = 20
-CONVERGENCE_THRESHOLD = 2  # How many personas must vote True to converge
+MAX_TURNS = 50
+CONVERGENCE_THRESHOLD = 3  # How many personas must vote True to converge
 MIN_TURNS_BEFORE_CONVERGENCE = 6  # Require at least 2 full rounds before convergence can trigger
 
 
