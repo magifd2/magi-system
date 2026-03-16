@@ -16,7 +16,7 @@ _console = Console(stderr=True)
 
 BASE_URL = "http://localhost:1234/v1"
 API_KEY = "lm-studio"
-MODEL = "qwen3-swallow-30b-a3b-sft-v0.2-mlx"
+MODEL = "qwen/qwen3-30b-a3b-2507"
 
 MAX_RETRIES = 3
 RETRY_DELAY = 2.0  # seconds
