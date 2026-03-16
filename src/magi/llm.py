@@ -235,3 +235,71 @@ class LLMClient:
             convergence_vote=False,
             convergence_reason="APIエラーのため収束判断を保留します。",
         )
+
+    def check_topic_coverage(
+        self,
+        topic: str,
+        messages: list[Message],
+    ) -> tuple[bool, list[str]]:
+        """
+        Evaluate whether the recent discussion has adequately covered the original topic.
+
+        Returns:
+            (adequate, missing_points)
+            adequate: True if no significant gaps remain.
+            missing_points: List of uncovered points (empty when adequate=True).
+            On any error, returns (True, []) to avoid blocking convergence.
+        """
+        persona_msgs = [
+            m for m in messages
+            if m.role == MessageRole.ASSISTANT and m.speaker
+        ]
+        recent_text = "\n".join(
+            f"{m.speaker}: {m.content}" for m in persona_msgs[-10:]
+        )
+
+        if not recent_text:
+            return True, []
+
+        system_prompt = (
+            "あなたは議論の品質評価者です。"
+            "元の議題と直近の議論内容を照合し、JSON形式のみで回答してください。"
+        )
+        user_prompt = (
+            f"【元の議題】\n{topic}\n\n"
+            f"【直近の議論】\n{recent_text}\n\n"
+            "以下の観点で、元の議題に対して「まだ議論されていない・回答されていない」点を"
+            "具体的にリストアップしてください。\n\n"
+            "評価観点：\n"
+            "1. 元の議題で明示された条件・制約（変更管理手法、開発プロセス等）への評価\n"
+            "2. 導入の「是非」に対する明確な賛否の立場表明\n"
+            "3. 採用テクニカルスタックの固有リスク（技術的特性による問題）\n"
+            "4. 明らかに見落とされている前提条件やリスク\n\n"
+            "注意：「議論された」とは、その論点に対して具体的な根拠と立場が示された場合です。"
+            "単に言及されただけでは「議論された」とみなしません。\n\n"
+            "JSON形式で回答してください（他のテキストは不要）：\n"
+            '{"adequate": true または false, "missing_points": ["未カバーの論点1", "未カバーの論点2", ...]}\n'
+            "adequate は missing_points が空の場合のみ true にしてください。"
+        )
+
+        try:
+            response = self._client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.3,
+                max_tokens=512,
+            )
+            raw = response.choices[0].message.content or ""
+            json_str = _extract_json_block(raw)
+            if json_str:
+                data = json.loads(json_str)
+                adequate = bool(data.get("adequate", False))
+                missing = [str(p) for p in data.get("missing_points", [])]
+                return adequate, missing
+        except Exception:
+            pass
+
+        return True, []

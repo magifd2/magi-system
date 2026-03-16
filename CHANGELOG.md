@@ -4,6 +4,23 @@
 
 ---
 
+## [0.20.0] - 2026-03-17
+
+### Changed
+- `discussion.py` — カバレッジチェックのタイミングを「収束確定時」から「固定ターン（`COVERAGE_CHECK_TURN=8`）」に変更。Qwen3クラスが早期（ターン4〜7）に収束モードに入っても、ペルソナがまだ議論モードにいるタイミングで欠落論点を注入できるようになった。
+- `discussion.py` — `_check_convergence()` にカバレッジ通過フラグ（`_coverage_passed`）のガードを追加。チェックが通過するまで収束確定をブロックする。
+- `discussion.py` — カバレッジ注入メッセージを報告形式から行動指示形式（「収束判断を一時保留し、以下の点に正面から回答してください」）に変更。
+- `llm.py` — `check_topic_coverage()` メソッドを `LLMClient` に移動。`missing_points` を文字列から `list[str]` に変更し、`_extract_json_block` を流用。
+
+### Added
+- `discussion.py` — `COVERAGE_CHECK_TURN = 8`・`MAX_COVERAGE_RETRIES = 1` 定数を追加。
+- `discussion.py` — `_run_coverage_check()` メソッドを追加（旧 `_check_topic_coverage()` を再設計）。チェック回数を `_coverage_checked` でカウントし、`MAX_COVERAGE_RETRIES` 超過時は強制通過。
+
+### Removed
+- `discussion.py` — 旧 `_check_topic_coverage()` メソッドと `MAX_TOPIC_COVERAGE_RETRIES` 定数を削除。
+
+---
+
 ## [0.19.0] - 2026-03-17
 
 ### Added
