@@ -135,6 +135,7 @@ class LLMClient:
         topic: str,
         other_personas: list[str],
         extra_instruction: str = "",
+        turn: int = 0,
     ) -> PersonaResponse:
         """
         Call the LLM as a specific persona and parse the structured response.
@@ -152,8 +153,15 @@ class LLMClient:
         # Build the message list for the API call
         api_messages: list[dict] = [{"role": "system", "content": system_prompt}]
 
+        # Case 3: inject urgency when discussion is running long
+        urgency = ""
+        if turn > 12:
+            urgency = (
+                "\n【警告】議論が長期化しています。"
+                "自分の主張に固執せず、他者の意見との統合や落としどころの模索を始めてください。"
+            )
+
         if messages:
-            # Summarise the discussion context as a user prompt
             context_lines: list[str] = [f"【議論トピック】{topic}\n\n【これまでの議論】"]
             for msg in messages:
                 if msg.role == MessageRole.ASSISTANT and msg.speaker:
@@ -161,11 +169,11 @@ class LLMClient:
                 elif msg.role == MessageRole.USER:
                     context_lines.append(f"（進行）{msg.content}")
             instruction = extra_instruction or "上記の議論を受けて、あなたの見解をJSON形式で回答してください。"
-            context_lines.append(f"\n{instruction}")
+            context_lines.append(f"\n{instruction}{urgency}")
             user_content = "\n".join(context_lines)
         else:
             instruction = extra_instruction or "このトピックについて、あなたの最初の見解をJSON形式で回答してください。"
-            user_content = f"【議論トピック】{topic}\n\n{instruction}"
+            user_content = f"【議論トピック】{topic}\n\n{instruction}{urgency}"
 
         api_messages.append({"role": "user", "content": user_content})
 
@@ -175,7 +183,9 @@ class LLMClient:
                 response = self._client.chat.completions.create(
                     model=self.model,
                     messages=api_messages,  # type: ignore[arg-type]
-                    temperature=0.7,
+                    temperature=0.8,
+                    presence_penalty=0.6,
+                    frequency_penalty=0.6,
                     max_tokens=1024,
                 )
                 raw_text = response.choices[0].message.content or ""

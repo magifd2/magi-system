@@ -83,6 +83,7 @@ class DiscussionEngine:
                 messages=self._shared_memory,
                 topic=topic,
                 other_personas=ALL_PERSONAS,
+                turn=turn,
             )
 
             # Update persona state
