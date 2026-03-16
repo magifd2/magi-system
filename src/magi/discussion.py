@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import random
+import re
 from datetime import datetime
 from typing import Callable, Optional
 
@@ -14,6 +16,7 @@ from magi.persona import ALL_PERSONAS, INITIAL_ROLES, Persona
 MAX_TURNS = 50
 CONVERGENCE_THRESHOLD = 2  # How many personas must vote True to converge
 MIN_TURNS_BEFORE_CONVERGENCE = 10  # Require at least N turns before convergence can trigger
+MAX_TOPIC_COVERAGE_RETRIES = 2  # Max times topic-coverage check can block convergence
 
 
 def _persona_state_snapshot(persona: Persona) -> PersonaState:
@@ -87,6 +90,7 @@ class DiscussionEngine:
 
         last_speaker: Optional[str] = None
         turn = 0
+        topic_coverage_retries = 0
 
         while turn < MAX_TURNS:
             # Pick next speaker (avoid repeating same persona consecutively)
@@ -156,10 +160,34 @@ class DiscussionEngine:
             state = self._build_state(topic, turn_count=turn)
             self._notify(state)
 
-            # Check convergence: all personas voted True (via recent messages), after minimum turns
+            # Check convergence: vote flags + recent markers
             if self._check_convergence(turn):
-                state.is_converged = True
-                break
+                # Before finalising, verify the discussion actually covered the topic
+                if topic_coverage_retries >= MAX_TOPIC_COVERAGE_RETRIES:
+                    # Retry limit reached — accept convergence as-is
+                    state.is_converged = True
+                    break
+                adequate, missing_points = self._check_topic_coverage(topic)
+                if adequate:
+                    state.is_converged = True
+                    break
+                # Coverage insufficient: inject facilitator prompt and keep going
+                topic_coverage_retries += 1
+                coverage_msg = Message(
+                    role=MessageRole.USER,
+                    content=(
+                        "【ファシリテーター：議題カバレッジ不足】"
+                        "収束に向かっていますが、元の議題に対して以下の論点がまだ十分に議論されていません。"
+                        f"\n{missing_points}\n"
+                        "各ペルソナはこれらの点に正面から答えた上で、改めて収束判断を行ってください。"
+                    ),
+                    speaker="ファシリテーター",
+                    timestamp=datetime.now(),
+                )
+                self._shared_memory.append(coverage_msg)
+                # Reset convergence votes so personas must re-evaluate
+                for p in self._personas.values():
+                    p.convergence_vote = False
 
         # --- Closing statements phase ---
         self._run_closing_phase(topic, turn_count=turn)
@@ -267,6 +295,63 @@ class DiscussionEngine:
             m.speaker for m in recent if "【収束に同意】" in m.content
         }
         return len(agreed_recently) >= CONVERGENCE_THRESHOLD
+
+    def _check_topic_coverage(self, topic: str) -> tuple[bool, str]:
+        """
+        Ask the LLM whether the recent discussion has adequately covered the original topic.
+
+        Returns:
+            (adequate, missing_points) — adequate=True means convergence can proceed.
+            On any error, returns (True, "") to avoid blocking convergence indefinitely.
+        """
+        recent_opinions = [
+            m.content
+            for m in self._shared_memory
+            if m.role == MessageRole.ASSISTANT and m.speaker
+        ][-6:]
+
+        if not recent_opinions:
+            return True, ""
+
+        discussion_excerpt = "\n".join(recent_opinions)
+
+        system_prompt = (
+            "あなたは議論の品質を評価するアナリストです。"
+            "元の議題に対して直近の議論が十分に論点をカバーしているか客観的に評価し、"
+            "必ずJSONのみで回答してください。"
+        )
+        user_prompt = (
+            f"【元の議題】\n{topic}\n\n"
+            f"【直近の議論（抜粋）】\n{discussion_excerpt}\n\n"
+            "以下の観点で未検討・未回答の点があればリストアップしてください:\n"
+            "1. 元の議題で明示された条件・制約への言及\n"
+            "2. 導入の「是非」（賛否の判断）への回答\n"
+            "3. 明らかに見落とされているリスクや前提\n\n"
+            '{"adequate": true/false, "missing_points": "未カバーの論点（なければ空文字）"}'
+        )
+
+        try:
+            response = self._llm._client.chat.completions.create(
+                model=self._llm.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.3,
+                max_tokens=512,
+            )
+            raw = response.choices[0].message.content or ""
+            # Extract JSON
+            m = re.search(r"\{.*\}", raw, re.DOTALL)
+            if m:
+                data = json.loads(m.group(0))
+                adequate = bool(data.get("adequate", True))
+                missing = str(data.get("missing_points", "")).strip()
+                return adequate, missing
+        except Exception:
+            pass  # Fall through: don't block convergence on error
+
+        return True, ""
 
     def _build_state(self, topic: str, turn_count: int = 0) -> DiscussionState:
         """Build a DiscussionState snapshot from current engine state."""
