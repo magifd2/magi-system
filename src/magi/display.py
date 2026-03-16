@@ -194,6 +194,13 @@ class DiscussionDisplay:
         if ps is None:
             parts.append(Text("（データなし）", style="dim"))
         else:
+            # Initial role badge
+            if ps.initial_role:
+                role_colors = {"推進派": "green", "懐疑派": "red", "代替案提案派": "magenta"}
+                rc = role_colors.get(ps.initial_role, "white")
+                parts.append(Text.from_markup(f"[bold {rc}]【{ps.initial_role}】[/bold {rc}]"))
+                parts.append(Text(""))
+
             # Stance — keep to 2 lines max
             parts.append(Text("■ 現在の立場", style="bold"))
             if ps.current_stance:

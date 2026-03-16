@@ -91,6 +91,7 @@ class PersonaState(BaseModel):
     """Snapshot of a persona's current state."""
 
     name: str
+    initial_role: Optional[str] = None
     current_stance: Optional[str] = None
     emotions: dict[str, EmotionState] = Field(default_factory=dict)
     convergence_vote: Optional[bool] = None

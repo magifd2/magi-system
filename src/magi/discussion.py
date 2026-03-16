@@ -8,17 +8,19 @@ from typing import Callable, Optional
 
 from magi.llm import LLMClient
 from magi.models import DiscussionState, Message, MessageRole, PersonaState
-from magi.persona import ALL_PERSONAS, Persona
+from magi.persona import ALL_PERSONAS, INITIAL_ROLES, Persona
 
 
 MAX_TURNS = 20
 CONVERGENCE_THRESHOLD = 2  # How many personas must vote True to converge
+MIN_TURNS_BEFORE_CONVERGENCE = 6  # Require at least 2 full rounds before convergence can trigger
 
 
 def _persona_state_snapshot(persona: Persona) -> PersonaState:
     """Create a PersonaState snapshot from a Persona object."""
     return PersonaState(
         name=persona.name,
+        initial_role=persona.initial_role,
         current_stance=persona.current_stance,
         emotions=dict(persona.emotions),
         convergence_vote=persona.convergence_vote,
@@ -60,13 +62,11 @@ class DiscussionEngine:
 
         Returns the final DiscussionState including the report.
         """
+        # Assign initial roles (推進派 / 懐疑派 / 代替案提案派) randomly
+        self._assign_initial_roles()
+
         state = self._build_state(topic)
         self._notify(state)
-
-        # Randomly choose the first speaker
-        speaker_order = list(ALL_PERSONAS)
-        random.shuffle(speaker_order)
-        first_speaker = speaker_order[0]
 
         last_speaker: Optional[str] = None
         turn = 0
@@ -105,9 +105,9 @@ class DiscussionEngine:
             state.turn_count = turn
             self._notify(state)
 
-            # Check convergence: 2+ personas voted True
+            # Check convergence: 2+ personas voted True, after minimum turns
             convergence_count = self._count_convergence_votes()
-            if convergence_count >= CONVERGENCE_THRESHOLD:
+            if convergence_count >= CONVERGENCE_THRESHOLD and turn >= MIN_TURNS_BEFORE_CONVERGENCE:
                 state.is_converged = True
                 break
 
@@ -127,6 +127,13 @@ class DiscussionEngine:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    def _assign_initial_roles(self) -> None:
+        """Randomly assign one of the three initial roles to each persona."""
+        roles = list(INITIAL_ROLES)
+        random.shuffle(roles)
+        for persona, role in zip(self._personas.values(), roles):
+            persona.initial_role = role
 
     def _run_closing_phase(self, topic: str) -> None:
         """
