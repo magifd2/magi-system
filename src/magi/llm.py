@@ -163,7 +163,18 @@ class LLMClient:
 
         if messages:
             context_lines: list[str] = [f"【議論トピック】{topic}\n\n【これまでの議論】"]
-            for msg in messages:
+
+            # Truncation: keep the first message (facilitator's opening) + last N turns.
+            # The persona's own prior stance is already in the system prompt (long-term memory),
+            # so the history only needs to convey recent flow and atmosphere.
+            RECENT_TURNS_TO_KEEP = 8
+            if len(messages) > RECENT_TURNS_TO_KEEP + 1:
+                filtered = [messages[0]] + list(messages[-RECENT_TURNS_TO_KEEP:])
+                context_lines.append("（...中盤の議論履歴は省略...）")
+            else:
+                filtered = list(messages)
+
+            for msg in filtered:
                 if msg.role == MessageRole.ASSISTANT and msg.speaker:
                     context_lines.append(f"{msg.speaker}: {msg.content}")
                 elif msg.role == MessageRole.USER:
