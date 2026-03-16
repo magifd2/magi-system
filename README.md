@@ -38,7 +38,7 @@
 - Python 3.11 以上
 - [uv](https://docs.astral.sh/uv/) （パッケージ管理）
 - [LM Studio](https://lmstudio.ai/) （ローカルLLMサーバー）
-  - モデル: `openai/gpt-oss-20b`
+  - モデル: `qwen/qwen3-30b-a3b-2507`
   - エンドポイント: `http://localhost:1234/v1`
 
 ## セットアップ
@@ -156,7 +156,7 @@ magi-system/
 |------|-----------|------|
 | `BASE_URL` | `http://localhost:1234/v1` | LLMエンドポイント |
 | `API_KEY` | `lm-studio` | APIキー |
-| `MODEL` | `openai/gpt-oss-20b` | 使用モデル |
+| `MODEL` | `qwen/qwen3-30b-a3b-2507` | 使用モデル |
 
 生成パラメータ（`temperature=0.8`・`presence_penalty=0.6`・`frequency_penalty=0.6`）は `chat_with_persona` 内で設定しています。
 
