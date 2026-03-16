@@ -242,6 +242,12 @@ class DiscussionEngine:
             state.is_converged = True
             self._notify(state)
 
+    def _set_coverage_passed(self) -> None:
+        """Mark coverage as passed and propagate the flag to all personas."""
+        self._coverage_passed = True
+        for p in self._personas.values():
+            p.coverage_passed = True
+
     def _pick_next_speaker(self, last_speaker: Optional[str]) -> str:
         """Pick the next speaker, avoiding repeating the same persona consecutively."""
         candidates = [n for n in ALL_PERSONAS if n != last_speaker]
@@ -300,12 +306,12 @@ class DiscussionEngine:
         )
 
         if adequate:
-            self._coverage_passed = True
+            self._set_coverage_passed()
             return
 
         # Force-pass when retry limit is reached
         if self._coverage_checked > MAX_COVERAGE_RETRIES:
-            self._coverage_passed = True
+            self._set_coverage_passed()
             return
 
         # Inject facilitator message with missing points as action directive

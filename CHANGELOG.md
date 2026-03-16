@@ -4,6 +4,15 @@
 
 ---
 
+## [0.22.0] - 2026-03-17
+
+### Added
+- `persona.py` `_build_system_prompt()` — `coverage_passed: bool` 引数を追加。`False` の間は `convergence_vote`/`convergence_reason` フィールドをJSONスキーマから完全に除去し、収束の概念自体をモデルに届けない。`True` になった時点で初めて収束フィールドとルール10〜12が出現する。
+- `persona.py` `Persona` — `coverage_passed: bool = False` インスタンス変数を追加。`system_prompt` プロパティが参照して `_build_system_prompt` に渡す。
+- `discussion.py` `_set_coverage_passed()` — カバレッジ通過時に `self._coverage_passed` と全ペルソナの `coverage_passed` フラグを同時に `True` に設定するヘルパーを追加。
+
+---
+
 ## [0.21.0] - 2026-03-17
 
 ### Changed

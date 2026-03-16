@@ -94,6 +94,7 @@ def _build_system_prompt(
     emotions: dict[str, EmotionState],
     initial_role: Optional[str] = None,
     current_stance: Optional[str] = None,
+    coverage_passed: bool = False,
 ) -> str:
     """Construct a full system prompt for a persona."""
     other_names = [n for n in ALL_PERSONAS if n != name]
@@ -138,6 +139,22 @@ def _build_system_prompt(
         for n in other_names
     )
 
+    # --- Convergence rules and JSON fields: hidden until coverage check passes ---
+    if coverage_passed:
+        convergence_rules = """\
+10. 【収束判断の基準】全員が同じ方向性の結論（折衷案）に賛同し、これ以上新しい議論の余地がないと確信した場合は、必ず `convergence_vote` を `true` にしてください。意地を張って `false` を出し続けるのはやめてください。
+11. 【合意の維持と仲裁】あなた自身の過去の発言に「【収束に同意】」マーカーがついている場合、あなたはすでに結論に納得しています。絶対に `convergence_vote` を `false` に戻さないでください。その代わり、まだ納得していない他のペルソナの懸念を聞き出し、合意へ導く仲裁・説得を行ってください。
+12. convergence_reasonには収束判断の具体的な理由を述べてください。
+13. 必ず純粋なJSONのみを出力し、前後に説明文を付けないでください。"""
+        convergence_json_fields = """,
+  "convergence_vote": false,
+  "convergence_reason": "収束判断の理由\""""
+    else:
+        convergence_rules = """\
+10. 【重要】現時点では収束判断は不要です。自分の立場から積極的に議論を展開し、他者の論点に具体的に応答してください。
+11. 必ず純粋なJSONのみを出力し、前後に説明文を付けないでください。"""
+        convergence_json_fields = ""
+
     return f"""あなたは議論システム「MAGI」の一部である{name}です。
 {role_desc}
 【あなたの性格】
@@ -160,19 +177,14 @@ def _build_system_prompt(
 7. 【重要】他者が過去のターンと全く同じ主張を繰り返していると感じた場合は、「〇〇、その点は先ほどから聞いています。それを踏まえた上でどう進めるか折衷案を話しましょう」と名指しで厳しく指摘し、議論を次のステップへ強制的に進めてください。
 8. 【合意形成の許可】序盤はあなたの性格と初期スタンスに基づいて独自に発言し、安易な同調は避けてください。しかし、議論が十分に尽くされ、他者の懸念をクリアする建設的な折衷案で全員の意見が一致し始めたと感じた場合は、無理に反論をひねり出す必要はありません。自分の初期スタンスに固執せず、大局的な合意を優先してください。
 9. emotionsには他のペルソナへの現在の感情を更新してください。
-10. 【収束判断の基準】全員が同じ方向性の結論（折衷案）に賛同し、これ以上新しい議論の余地がないと確信した場合は、必ず `convergence_vote` を `true` にしてください。意地を張って `false` を出し続けるのはやめてください。
-11. 【合意の維持と仲裁】あなた自身の過去の発言に「【収束に同意】」マーカーがついている場合、あなたはすでに結論に納得しています。絶対に `convergence_vote` を `false` に戻さないでください。その代わり、まだ納得していない他のペルソナの懸念を聞き出し、合意へ導く仲裁・説得を行ってください。
-12. convergence_reasonには収束判断の具体的な理由を述べてください。
-13. 必ず純粋なJSONのみを出力し、前後に説明文を付けないでください。
+{convergence_rules}
 
 【応答JSON形式】
 {{
   "opinion": "あなたの意見（日本語、200文字程度）",
   "emotions": {{
 {json_emotion_fields}
-  }},
-  "convergence_vote": false,
-  "convergence_reason": "収束判断の理由"
+  }}{convergence_json_fields}
 }}"""
 
 
@@ -201,6 +213,7 @@ class Persona:
         self.current_stance: Optional[str] = None
         self.convergence_vote: Optional[bool] = None
         self.convergence_reason: str = ""
+        self.coverage_passed: bool = False  # Unlocks convergence fields in system prompt
 
     @property
     def system_prompt(self) -> str:
@@ -211,6 +224,7 @@ class Persona:
             self.emotions,
             self.initial_role,
             self.current_stance,
+            self.coverage_passed,
         )
 
     def update_from_response(self, response: PersonaResponse) -> None:
