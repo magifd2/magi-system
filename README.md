@@ -148,6 +148,7 @@ magi-system/
 | `MAX_TURNS` | `50` | 議論の最大ターン数（安全上限） |
 | `CONVERGENCE_THRESHOLD` | `3` | 収束に必要な賛成ペルソナ数 |
 | `MIN_TURNS_BEFORE_CONVERGENCE` | `6` | 収束判定を開始する最低ターン数 |
+| ファシリテーター警告 | `MAX_TURNS // 2` | 平行線ループ打破のため折衷案提示を強制する介入タイミング（`MAX_TURNS` に連動） |
 
 `src/magi/llm.py` の定数でLLMの挙動を調整できます。
 
