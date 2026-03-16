@@ -65,6 +65,23 @@ class DiscussionEngine:
         # Assign initial roles (推進派 / 懐疑派 / 代替案提案派) randomly
         self._assign_initial_roles()
 
+        # Facilitator opens the discussion
+        role_summary = "、".join(
+            f"{p.name}（{p.initial_role}）" for p in self._personas.values()
+        )
+        facilitator_msg = Message(
+            role=MessageRole.USER,
+            content=(
+                f"本日の議題は以下の通りです。\n\n「{topic}」\n\n"
+                f"各ペルソナの担当スタンス：{role_summary}\n\n"
+                "それでは、割り当てられた立場とご自身の性格に基づき、議論を開始してください。"
+                "他のペルソナへの名指しでの言及も歓迎します。"
+            ),
+            speaker="ファシリテーター",
+            timestamp=datetime.now(),
+        )
+        self._shared_memory.append(facilitator_msg)
+
         state = self._build_state(topic)
         self._notify(state)
 

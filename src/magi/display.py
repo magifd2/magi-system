@@ -19,6 +19,7 @@ PERSONA_STYLE: dict[str, str] = {
     "MELCHIOR": "bold blue",
     "BALTHASAR": "bold yellow",
     "CASPER": "bold green",
+    "ファシリテーター": "bold white on dark_red",
 }
 
 SENTIMENT_SYMBOL: dict[str, str] = {
