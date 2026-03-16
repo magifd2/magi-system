@@ -4,6 +4,36 @@
 
 ---
 
+## [0.17.0] - 2026-03-17
+
+### Fixed
+- `discussion.py` `_check_convergence()` — 直近マーカー確認の閾値を `CONVERGENCE_THRESHOLD`（3）から `CONVERGENCE_THRESHOLD - 1`（2）に緩和。全員一致フラグ＋直近3名全員マーカーという二重の厳格条件が、1名の条件付き発言1ターンで収束をブロックしていた問題を修正。
+- `persona.py` `update_from_response()` — 一度 `convergence_vote = True` になったペルソナはコード側でフラグを守り、LLMが次ターンに `false` を返しても上書きしないよう修正。システムプロンプトのルール11（合意維持）を20Bモデルが守れないケースへのコードガード。
+
+### Changed
+- `llm.py` — `presence_penalty` / `frequency_penalty` を 0.6 → 0.8 に引き上げ。ターン5付近でペルソナが他者の発言を丸コピーする劣化パターンの抑制を強化。
+
+---
+
+## [0.16.0] - 2026-03-17
+
+### Fixed
+- **A-1**: `discussion.py` — `turn_count` をペルソナ発言数（`turn` 変数）に統一。`_build_state()` のデフォルトを 0 に変更し、全呼び出し元で明示的に渡すよう修正。ファシリテーターメッセージを含む `len(shared_memory)` を誤ってターン数として使っていたバグを解消。
+- **A-3**: `save.py` — 議論ログの連番をペルソナ発言のみにカウント。ファシリテーター/システム注入メッセージはターン番号を付けず区切り線＋太字スタイルで表示するよう変更。
+
+### Changed
+- **B-1**: `llm.py` — `RECENT_TURNS_TO_KEEP` を 8 → 16 に拡大。20B モデルのコンテキスト余裕を活かし、直近16ターンの履歴を保持するよう変更。
+- **B-2**: `llm.py` — urgency 注入閾値をハードコードの `turn > 12` から `turn > max_turns * 0.6`（動的計算）に変更。`chat_with_persona` に `max_turns` 引数を追加し、`discussion.py` から `MAX_TURNS` を渡すよう修正。
+- **C-3**: `discussion.py` — `closing_instruction` から「JSON形式で」の記述を削除。締めくくりフェーズはプレーンテキストの発言を促す自然な指示に変更。
+
+### Added
+- **B-3**: `discussion.py` — `_check_convergence()` メソッドを追加。従来の `convergence_vote` フラグカウントに加え、直近4件のペルソナ発言メッセージ内に `【収束に同意】` マーカーが `CONVERGENCE_THRESHOLD` 件以上含まれることを確認してから収束判定を行う。古い（陳腐化した）フラグによる誤収束を防止。
+- **B-4**: `discussion.py` — `MAX_TURNS * 0.75` ターン超過時点で収束票がゼロの場合、より強い「最終警告」ファシリテーターメッセージを `shared_memory` へ自動注入。全ペルソナに即時折衷案提示と `convergence_vote: true` を強く促す。
+- **C-1**: `llm.py` — `_build_fallback_response()` の JSON 残骸除去をイテレート方式（入れ子 `{}` の反復除去）に強化。加えて markdown コードフェンス除去・連続空行の圧縮も実施。
+- **C-2**: `llm.py` — `_parse_persona_response()` 内でセルフエコー後処理を追加。LLM が自分自身のペルソナ名を名指しで呼びかけるパターン（例: `MELCHIOR、`）を正規表現で除去してから `opinion` に格納。
+
+---
+
 ## [0.15.0] - 2026-03-17
 
 ### Added

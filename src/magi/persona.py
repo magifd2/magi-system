@@ -216,7 +216,10 @@ class Persona:
     def update_from_response(self, response: PersonaResponse) -> None:
         """Update persona state based on an LLM response."""
         self.current_stance = response.opinion
-        self.convergence_vote = response.convergence_vote
+        # Once a persona has agreed to converge, never allow it to retract —
+        # the LLM may not reliably follow the system-prompt rule about this.
+        if not self.convergence_vote:
+            self.convergence_vote = response.convergence_vote
         self.convergence_reason = response.convergence_reason
 
         for other_name, emotion_state in response.emotions.items():

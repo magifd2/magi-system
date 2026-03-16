@@ -82,7 +82,7 @@ class DiscussionEngine:
         )
         self._shared_memory.append(facilitator_msg)
 
-        state = self._build_state(topic)
+        state = self._build_state(topic, turn_count=0)
         self._notify(state)
 
         last_speaker: Optional[str] = None
@@ -101,6 +101,7 @@ class DiscussionEngine:
                 topic=topic,
                 other_personas=ALL_PERSONAS,
                 turn=turn,
+                max_turns=MAX_TURNS,
             )
 
             # Update persona state
@@ -136,20 +137,33 @@ class DiscussionEngine:
                 )
                 self._shared_memory.append(warning_msg)
 
+            # Second facilitator warning at 75%: stronger push if no convergence at all
+            if turn == int(MAX_TURNS * 0.75) and self._count_convergence_votes() == 0:
+                warning2_msg = Message(
+                    role=MessageRole.USER,
+                    content=(
+                        "【ファシリテーターからの最終警告】議論の残りターンが少なくなっています。"
+                        "全ペルソナは今すぐ具体的な折衷案を示し、"
+                        "互いの妥協点を明示して収束に向けてください。"
+                        "これ以上の平行線は認められません。今すぐ `convergence_vote: true` を目指してください。"
+                    ),
+                    speaker="ファシリテーター",
+                    timestamp=datetime.now(),
+                )
+                self._shared_memory.append(warning2_msg)
+
             # Refresh state snapshot and notify display
-            state = self._build_state(topic)
-            state.turn_count = turn
+            state = self._build_state(topic, turn_count=turn)
             self._notify(state)
 
-            # Check convergence: 2+ personas voted True, after minimum turns
-            convergence_count = self._count_convergence_votes()
-            if convergence_count >= CONVERGENCE_THRESHOLD and turn >= MIN_TURNS_BEFORE_CONVERGENCE:
+            # Check convergence: all personas voted True (via recent messages), after minimum turns
+            if self._check_convergence(turn):
                 state.is_converged = True
                 break
 
         # --- Closing statements phase ---
-        self._run_closing_phase(topic)
-        state = self._build_state(topic)
+        self._run_closing_phase(topic, turn_count=turn)
+        state = self._build_state(topic, turn_count=turn)
         state.is_converged = True
         self._notify(state)
 
@@ -171,7 +185,7 @@ class DiscussionEngine:
         for persona, role in zip(self._personas.values(), roles):
             persona.initial_role = role
 
-    def _run_closing_phase(self, topic: str) -> None:
+    def _run_closing_phase(self, topic: str, turn_count: int = 0) -> None:
         """
         After convergence, ask every persona for a closing statement in fixed order.
         A separator message is injected first so all personas see the phase transition.
@@ -186,7 +200,7 @@ class DiscussionEngine:
 
         closing_instruction = (
             "議論が収束しました。あなたの視点から、この議論全体を振り返り、"
-            "最終的な見解と今後への言及を含む締めくくりのコメントをJSON形式で述べてください。"
+            "最終的な見解と今後への言及を含む締めくくりのコメントを述べてください。"
         )
 
         for name in ALL_PERSONAS:
@@ -210,7 +224,7 @@ class DiscussionEngine:
             self._shared_memory.append(msg)
 
             # Notify display after each closing statement
-            state = self._build_state(topic)
+            state = self._build_state(topic, turn_count=turn_count)
             state.is_converged = True
             self._notify(state)
 
@@ -227,7 +241,36 @@ class DiscussionEngine:
             if p.convergence_vote is True
         )
 
-    def _build_state(self, topic: str) -> DiscussionState:
+    def _check_convergence(self, turn: int) -> bool:
+        """
+        Return True if convergence conditions are met.
+
+        Conditions:
+        - At least MIN_TURNS_BEFORE_CONVERGENCE turns have passed.
+        - At least CONVERGENCE_THRESHOLD personas have convergence_vote=True.
+        - Among the last 4 persona messages in shared memory, at least
+          CONVERGENCE_THRESHOLD distinct personas show the 【収束に同意】 marker,
+          ensuring recent (not stale) agreement.
+        """
+        if turn < MIN_TURNS_BEFORE_CONVERGENCE:
+            return False
+        if self._count_convergence_votes() < CONVERGENCE_THRESHOLD:
+            return False
+
+        # Collect last 4 persona (ASSISTANT) messages
+        persona_msgs = [
+            m for m in self._shared_memory
+            if m.role == MessageRole.ASSISTANT and m.speaker
+        ]
+        recent = persona_msgs[-4:]
+        agreed_recently = {
+            m.speaker for m in recent if "【収束に同意】" in m.content
+        }
+        # Use THRESHOLD - 1 for the recent-marker check so that a single
+        # non-agreeing turn by one persona doesn't block an otherwise clear consensus.
+        return len(agreed_recently) >= CONVERGENCE_THRESHOLD - 1
+
+    def _build_state(self, topic: str, turn_count: int = 0) -> DiscussionState:
         """Build a DiscussionState snapshot from current engine state."""
         persona_states = {
             name: _persona_state_snapshot(p)
@@ -237,7 +280,7 @@ class DiscussionEngine:
             topic=topic,
             messages=list(self._shared_memory),
             persona_states=persona_states,
-            turn_count=len(self._shared_memory),
+            turn_count=turn_count,
             is_converged=False,
         )
 

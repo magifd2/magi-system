@@ -42,10 +42,16 @@ def _build_fallback_response(persona_name: str, raw_text: str) -> PersonaRespons
     _console.print(
         f"[yellow]Warning: Could not parse JSON from {persona_name}'s response. Using fallback.[/yellow]"
     )
-    # Use the raw text as the opinion, stripping any JSON artifacts
+    # Strip JSON-looking blocks (including nested ones) iteratively
     opinion = raw_text.strip()
-    # Remove JSON-looking parts if any
-    opinion = re.sub(r'\{.*\}', '', opinion, flags=re.DOTALL).strip()
+    prev = None
+    while prev != opinion:
+        prev = opinion
+        opinion = re.sub(r'\{[^{}]*\}', '', opinion, flags=re.DOTALL).strip()
+    # Also strip markdown code fences
+    opinion = re.sub(r'```(?:json)?\s*', '', opinion).strip()
+    # Collapse excess blank lines
+    opinion = re.sub(r'\n{3,}', '\n\n', opinion).strip()
     if not opinion:
         opinion = raw_text.strip()[:500]
 
@@ -84,6 +90,14 @@ def _parse_persona_response(
     opinion = data.get("opinion", "")
     if not isinstance(opinion, str) or not opinion.strip():
         opinion = raw_text.strip()[:500]
+
+    # Post-process: remove self-referencing address patterns (セルフエコー対策)
+    # e.g. "MELCHIOR、あなたの…" or "MELCHIOR、私は…" where persona_name == "MELCHIOR"
+    opinion = re.sub(
+        rf"(?<!\w){re.escape(persona_name)}[、,，]\s*",
+        "",
+        opinion,
+    ).strip()
 
     # Parse emotions
     raw_emotions: dict = data.get("emotions", {})
@@ -136,6 +150,7 @@ class LLMClient:
         other_personas: list[str],
         extra_instruction: str = "",
         turn: int = 0,
+        max_turns: int = 50,
     ) -> PersonaResponse:
         """
         Call the LLM as a specific persona and parse the structured response.
@@ -153,9 +168,9 @@ class LLMClient:
         # Build the message list for the API call
         api_messages: list[dict] = [{"role": "system", "content": system_prompt}]
 
-        # Case 3: inject urgency when discussion is running long
+        # Inject urgency when discussion is running long (beyond 60% of max turns)
         urgency = ""
-        if turn > 12:
+        if turn > max_turns * 0.6:
             urgency = (
                 "\n【警告】議論が長期化しています。"
                 "自分の主張に固執せず、他者の意見との統合や落としどころの模索を始めてください。"
@@ -167,7 +182,7 @@ class LLMClient:
             # Truncation: keep the first message (facilitator's opening) + last N turns.
             # The persona's own prior stance is already in the system prompt (long-term memory),
             # so the history only needs to convey recent flow and atmosphere.
-            RECENT_TURNS_TO_KEEP = 8
+            RECENT_TURNS_TO_KEEP = 16
             if len(messages) > RECENT_TURNS_TO_KEEP + 1:
                 filtered = [messages[0]] + list(messages[-RECENT_TURNS_TO_KEEP:])
                 context_lines.append("（...中盤の議論履歴は省略...）")
@@ -195,8 +210,8 @@ class LLMClient:
                     model=self.model,
                     messages=api_messages,  # type: ignore[arg-type]
                     temperature=0.8,
-                    presence_penalty=0.6,
-                    frequency_penalty=0.6,
+                    presence_penalty=0.8,
+                    frequency_penalty=0.8,
                     max_tokens=1024,
                 )
                 raw_text = response.choices[0].message.content or ""

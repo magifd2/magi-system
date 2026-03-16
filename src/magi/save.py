@@ -6,7 +6,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-from magi.models import DiscussionState
+from magi.models import DiscussionState, MessageRole
 from magi.persona import ALL_PERSONAS
 
 
@@ -37,11 +37,23 @@ def build_markdown(state: DiscussionState, saved_at: datetime) -> str:
     # --- Conversation log ---
     lines += ["## 議論ログ", ""]
     if state.messages:
-        for i, msg in enumerate(state.messages, 1):
-            if msg.speaker:
-                ts = msg.timestamp.strftime("%H:%M:%S")
+        persona_turn = 0
+        for msg in state.messages:
+            ts = msg.timestamp.strftime("%H:%M:%S")
+            if msg.role == MessageRole.ASSISTANT and msg.speaker:
+                # Persona statement: sequential turn number
+                persona_turn += 1
                 lines += [
-                    f"### ターン {i} — {msg.speaker}  `{ts}`",
+                    f"### ターン {persona_turn} — {msg.speaker}  `{ts}`",
+                    "",
+                    msg.content,
+                    "",
+                ]
+            elif msg.speaker:
+                # Facilitator or system injection: divider style
+                lines += [
+                    f"---",
+                    f"**{msg.speaker}** `{ts}`",
                     "",
                     msg.content,
                     "",
