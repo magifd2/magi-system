@@ -58,6 +58,12 @@ INITIAL_ROLE_INSTRUCTIONS: dict[str, str] = {
     ),
 }
 
+PERSONA_PRIORITIES: dict[str, str] = {
+    "MELCHIOR": "1. 科学的根拠\n2. 論理整合性\n3. 再現性",
+    "BALTHASAR": "1. 倫理\n2. 人間感情\n3. 社会影響",
+    "CASPER": "1. 実装可能性\n2. コスト\n3. リスク",
+}
+
 
 def _emotion_behavior_section(name: str, emotions: dict[str, EmotionState]) -> str:
     """Build a section describing how to behave toward each other persona based on current emotions."""
@@ -95,6 +101,7 @@ def _build_system_prompt(
     initial_role: Optional[str] = None,
     current_stance: Optional[str] = None,
     coverage_passed: bool = False,
+    current_phase: str = "問題定義",
 ) -> str:
     """Construct a full system prompt for a persona."""
     other_names = [n for n in ALL_PERSONAS if n != name]
@@ -133,6 +140,13 @@ def _build_system_prompt(
         role_instruction = INITIAL_ROLE_INSTRUCTIONS.get(initial_role, "")
         role_desc = f"\n【あなたの初期スタンス: {initial_role}】\n{role_instruction}\n"
 
+    # --- Decision priorities ---
+    priority_desc = PERSONA_PRIORITIES.get(name, "")
+    priority_section = f"\n【意思決定の優先順位】\n{priority_desc}\n" if priority_desc else ""
+
+    # --- Discussion phase ---
+    phase_section = f"\n【現在の議論フェーズ】{current_phase}\n"
+
     # --- JSON emotion fields template ---
     json_emotion_fields = ",\n".join(
         f'    "{n}": {{"sentiment": "positive/neutral/negative", "intensity": 0.5, "notes": "感情の詳細"}}'
@@ -159,7 +173,7 @@ def _build_system_prompt(
 {role_desc}
 【あなたの性格】
 {personality_desc}
-{stance_section}
+{priority_section}{phase_section}{stance_section}
 
 【現在の感情状態】
 {emotion_section}
@@ -214,6 +228,8 @@ class Persona:
         self.convergence_vote: Optional[bool] = None
         self.convergence_reason: str = ""
         self.coverage_passed: bool = False  # Unlocks convergence fields in system prompt
+        self.current_phase: str = "問題定義"
+        self.turns_since_last: int = 0
 
     @property
     def system_prompt(self) -> str:
@@ -225,6 +241,7 @@ class Persona:
             self.initial_role,
             self.current_stance,
             self.coverage_passed,
+            self.current_phase,
         )
 
     def update_from_response(self, response: PersonaResponse) -> None:

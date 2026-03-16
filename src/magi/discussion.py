@@ -7,8 +7,18 @@ from datetime import datetime
 from typing import Callable, Optional
 
 from magi.llm import LLMClient
-from magi.models import DiscussionState, Message, MessageRole, PersonaState
+from magi.models import DiscussionState, Message, MessageRole, PersonaState, Sentiment
 from magi.persona import ALL_PERSONAS, INITIAL_ROLES, Persona
+
+
+def _bigram_similarity(text_a: str, text_b: str) -> float:
+    """Compute bigram Jaccard similarity between two strings (works well for Japanese)."""
+    if len(text_a) < 2 or len(text_b) < 2:
+        return 0.0
+    bg_a = {text_a[i:i + 2] for i in range(len(text_a) - 1)}
+    bg_b = {text_b[i:i + 2] for i in range(len(text_b) - 1)}
+    union = bg_a | bg_b
+    return len(bg_a & bg_b) / len(union) if union else 0.0
 
 
 MAX_TURNS = 50
@@ -100,6 +110,18 @@ class DiscussionEngine:
             speaker_name = self._pick_next_speaker(last_speaker)
             persona = self._personas[speaker_name]
 
+            # Novelty check: if persona has been repeating similar opinions, force new angle
+            novelty_instruction = ""
+            prev_msgs = [
+                m.content for m in self._shared_memory
+                if m.role == MessageRole.ASSISTANT and m.speaker == speaker_name
+            ]
+            if len(prev_msgs) >= 2 and _bigram_similarity(prev_msgs[-1], prev_msgs[-2]) > 0.7:
+                novelty_instruction = (
+                    "【重要】前回とほぼ同じ主張を繰り返しています。"
+                    "今回は必ず新しい切り口・視点・論拠で発言してください。"
+                )
+
             # --- LLM call ---
             response = self._llm.chat_with_persona(
                 persona_name=speaker_name,
@@ -109,6 +131,7 @@ class DiscussionEngine:
                 other_personas=ALL_PERSONAS,
                 turn=turn,
                 max_turns=MAX_TURNS,
+                extra_instruction=novelty_instruction,
             )
 
             # Update persona state
@@ -128,6 +151,15 @@ class DiscussionEngine:
 
             turn += 1
             last_speaker = speaker_name
+
+            # Update per-persona turn counters and discussion phase
+            phase = self._get_discussion_phase(turn)
+            for name, p in self._personas.items():
+                if name == speaker_name:
+                    p.turns_since_last = 0
+                else:
+                    p.turns_since_last += 1
+                p.current_phase = phase
 
             # Topic-coverage check (initial at COVERAGE_CHECK_TURN, retried dynamically)
             if (
@@ -245,6 +277,18 @@ class DiscussionEngine:
             state.is_converged = True
             self._notify(state)
 
+    @staticmethod
+    def _get_discussion_phase(turn: int) -> str:
+        """Return the current deliberation phase based on turn count."""
+        if turn <= 3:
+            return "問題定義（議題の背景・前提・論点を整理する段階）"
+        elif turn <= 7:
+            return "論点探索（各立場から可能性・リスク・代替案を掘り下げる段階）"
+        elif turn <= 12:
+            return "解決策設計（具体的な実装案・折衷案を構築する段階）"
+        else:
+            return "合意形成（結論・賛否の立場を明確にして収束を目指す段階）"
+
     def _set_coverage_passed(self) -> None:
         """Mark coverage as passed and propagate the flag to all personas."""
         self._coverage_passed = True
@@ -252,9 +296,38 @@ class DiscussionEngine:
             p.coverage_passed = True
 
     def _pick_next_speaker(self, last_speaker: Optional[str]) -> str:
-        """Pick the next speaker, avoiding repeating the same persona consecutively."""
+        """Pick the next speaker using a disagreement-maximising score."""
         candidates = [n for n in ALL_PERSONAS if n != last_speaker]
-        return random.choice(candidates)
+
+        best_name: Optional[str] = None
+        best_score = float("-inf")
+
+        last_persona = self._personas.get(last_speaker) if last_speaker else None
+
+        for name in candidates:
+            persona = self._personas[name]
+            score = 0.0
+
+            # Emotion toward last speaker
+            if last_speaker and last_speaker in persona.emotions:
+                emotion = persona.emotions[last_speaker]
+                if emotion.sentiment == Sentiment.NEGATIVE:
+                    score += 2.0 * emotion.intensity
+                elif emotion.sentiment == Sentiment.POSITIVE:
+                    score -= 1.0 * emotion.intensity
+
+            # Role conflict with last speaker
+            if last_persona and persona.initial_role != last_persona.initial_role:
+                score += 1.0
+
+            # Time since last turn (favour long-silent personas)
+            score += persona.turns_since_last * 0.5
+
+            if score > best_score:
+                best_score = score
+                best_name = name
+
+        return best_name or random.choice(candidates)
 
     def _count_convergence_votes(self) -> int:
         """Count how many personas currently vote convergence=True."""

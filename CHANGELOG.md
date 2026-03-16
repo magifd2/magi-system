@@ -4,6 +4,21 @@
 
 ---
 
+## [0.24.0] - 2026-03-17
+
+### Added
+- `persona.py` — `PERSONA_PRIORITIES` 辞書を追加。MELCHIOR（科学的根拠・論理整合性・再現性）、BALTHASAR（倫理・人間感情・社会影響）、CASPER（実装可能性・コスト・リスク）の意思決定優先順位をシステムプロンプトに明示し、ペルソナ差異を強化。
+- `persona.py` — `Persona` に `current_phase` / `turns_since_last` インスタンス変数を追加。
+- `discussion.py` — `_get_discussion_phase()` 静的メソッドを追加。ターン数に応じて「問題定義→論点探索→解決策設計→合意形成」の4フェーズを返し、各ペルソナのシステムプロンプトに現在フェーズを注入。早期収束防止と議論構造の明確化を実現。
+- `discussion.py` — `_bigram_similarity()` ユーティリティ関数を追加（日本語バイグラムJaccard類似度）。
+
+### Changed
+- `discussion.py` — `_pick_next_speaker()` をランダム選択から最大不一致スコア方式（Maximum Disagreement）に変更。否定感情（+2×強度）・役割対立（+1）・発言間隔（+0.5×turns）の合計スコアで次話者を選択し、議論密度と対立構造を向上。
+- `discussion.py` — LLM呼び出し前に Novelty Check を追加。直近2発言のバイグラム類似度が0.7超の場合に「新しい切り口で発言してください」という `extra_instruction` を自動付与し、同一主張ループを抑制。
+- `discussion.py` / `persona.py` — 毎ターン `turns_since_last` と `current_phase` を全ペルソナに更新。
+
+---
+
 ## [0.23.0] - 2026-03-17
 
 ### Fixed
