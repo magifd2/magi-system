@@ -21,6 +21,12 @@ MODEL = "qwen/qwen3-30b-a3b-2507"
 MAX_RETRIES = 3
 RETRY_DELAY = 2.0  # seconds
 
+PERSONA_TEMPERATURES: dict[str, float] = {
+    "MELCHIOR": 0.2,   # 論理・分析重視 → 低温で確定的な推論
+    "BALTHASAR": 0.7,  # 感情・共感重視 → 高温で多様な表現
+    "CASPER": 0.4,     # 実利・現実重視 → 中温でバランス
+}
+
 
 def _extract_json_block(text: str) -> Optional[str]:
     """Extract a JSON object from a text that might contain markdown code fences."""
@@ -209,7 +215,7 @@ class LLMClient:
                 response = self._client.chat.completions.create(
                     model=self.model,
                     messages=api_messages,  # type: ignore[arg-type]
-                    temperature=0.8,
+                    temperature=PERSONA_TEMPERATURES.get(persona_name, 0.5),
                     presence_penalty=0.8,
                     frequency_penalty=0.8,
                     max_tokens=1024,
