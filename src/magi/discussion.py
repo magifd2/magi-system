@@ -106,10 +106,13 @@ class DiscussionEngine:
             # Update persona state
             persona.update_from_response(response)
 
+            # Prepend convergence marker so future turns can see agreement status in text history
+            msg_content = f"【収束に同意】{response.opinion}" if response.convergence_vote else response.opinion
+
             # Add the opinion to shared memory
             msg = Message(
                 role=MessageRole.ASSISTANT,
-                content=response.opinion,
+                content=msg_content,
                 speaker=speaker_name,
                 timestamp=datetime.now(),
             )
