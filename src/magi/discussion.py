@@ -160,6 +160,8 @@ class DiscussionEngine:
                         "【ファシリテーターからの最終警告】議論の残りターンが少なくなっています。"
                         "全ペルソナは今すぐ具体的な折衷案を示し、"
                         "互いの妥協点を明示して収束に向けてください。"
+                        "また、各ペルソナは「導入・採用・実施をすべきか否か」という賛否の立場を"
+                        "必ず明示してください。実装方法の議論だけでは不十分です。"
                         "これ以上の平行線は認められません。今すぐ `convergence_vote: true` を目指してください。"
                     ),
                     speaker="ファシリテーター",
@@ -392,7 +394,7 @@ class DiscussionEngine:
                     {"role": "user", "content": user_prompt},
                 ],
                 temperature=0.5,
-                max_tokens=1500,
+                max_tokens=2500,
             )
             report_text = report_response.choices[0].message.content or ""
             if report_text.strip():
