@@ -93,6 +93,7 @@ def _build_system_prompt(
     personality_desc: str,
     emotions: dict[str, EmotionState],
     initial_role: Optional[str] = None,
+    current_stance: Optional[str] = None,
 ) -> str:
     """Construct a full system prompt for a persona."""
     other_names = [n for n in ALL_PERSONAS if n != name]
@@ -117,6 +118,14 @@ def _build_system_prompt(
 
     other_names_str = "、".join(other_names)  # e.g. "BALTHASAR、CASPER"
 
+    # --- Current stance (long-term self-memory) ---
+    stance_section = ""
+    if current_stance:
+        stance_section = (
+            f"\n【あなたの直前の主張（記憶）】\n{current_stance}\n\n"
+            "この主張との一貫性を保ちつつ、議論を進めてください。\n"
+        )
+
     # --- Initial role ---
     role_desc = ""
     if initial_role:
@@ -133,6 +142,7 @@ def _build_system_prompt(
 {role_desc}
 【あなたの性格】
 {personality_desc}
+{stance_section}
 
 【現在の感情状態】
 {emotion_section}
@@ -200,6 +210,7 @@ class Persona:
             self.personality_desc,
             self.emotions,
             self.initial_role,
+            self.current_stance,
         )
 
     def update_from_response(self, response: PersonaResponse) -> None:
