@@ -57,6 +57,7 @@ class DiscussionEngine:
         # Topic-coverage check state
         self._coverage_passed: bool = False
         self._coverage_checked: int = 0
+        self._next_coverage_check_turn: int = COVERAGE_CHECK_TURN
 
     # ------------------------------------------------------------------
     # Public API
@@ -128,13 +129,13 @@ class DiscussionEngine:
             turn += 1
             last_speaker = speaker_name
 
-            # Topic-coverage check at fixed turn (runs while in "discussion mode")
+            # Topic-coverage check (initial at COVERAGE_CHECK_TURN, retried dynamically)
             if (
-                turn == COVERAGE_CHECK_TURN
+                turn == self._next_coverage_check_turn
                 and not self._coverage_passed
                 and self._coverage_checked < MAX_COVERAGE_RETRIES + 1
             ):
-                self._run_coverage_check(topic)
+                self._run_coverage_check(topic, current_turn=turn)
 
             # Facilitator warning at midpoint: force compromise
             if turn == MAX_TURNS // 2:
@@ -291,10 +292,10 @@ class DiscussionEngine:
         }
         return len(agreed_recently) >= CONVERGENCE_THRESHOLD
 
-    def _run_coverage_check(self, topic: str) -> None:
+    def _run_coverage_check(self, topic: str, current_turn: int = 0) -> None:
         """
-        Run a topic-coverage check at a fixed turn and inject a facilitator message
-        if the discussion has not yet addressed all key points of the original topic.
+        Run a topic-coverage check and inject a facilitator message if key points
+        are missing. Schedules a retry 4 turns later on failure.
 
         Sets self._coverage_passed = True when the check passes or the retry limit
         is reached (to prevent infinite blocking).
@@ -310,7 +311,7 @@ class DiscussionEngine:
             return
 
         # Force-pass when retry limit is reached
-        if self._coverage_checked > MAX_COVERAGE_RETRIES:
+        if self._coverage_checked >= MAX_COVERAGE_RETRIES + 1:
             self._set_coverage_passed()
             return
 
@@ -330,6 +331,8 @@ class DiscussionEngine:
             timestamp=datetime.now(),
         )
         self._shared_memory.append(injection)
+        # Schedule retry 4 turns after the injection
+        self._next_coverage_check_turn = current_turn + 4
 
     def _build_state(self, topic: str, turn_count: int = 0) -> DiscussionState:
         """Build a DiscussionState snapshot from current engine state."""

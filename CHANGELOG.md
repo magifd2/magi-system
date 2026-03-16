@@ -4,6 +4,15 @@
 
 ---
 
+## [0.22.1] - 2026-03-17
+
+### Fixed
+- `discussion.py` — カバレッジチェックのリトライが永遠に走らないバグを修正。`turn == COVERAGE_CHECK_TURN`（一度しか真にならない）を `turn == self._next_coverage_check_turn`（動的管理）に変更。チェック失敗時に `_next_coverage_check_turn = current_turn + 4` でリトライターンをスケジュールするよう修正。
+- `discussion.py` — 強制通過条件の `>` を `>=` に修正（`MAX_COVERAGE_RETRIES=1` の場合に `_coverage_checked=1` で強制通過できなかった）。
+- `discussion.py` — `__init__` に `_next_coverage_check_turn: int = COVERAGE_CHECK_TURN` を追加。
+
+---
+
 ## [0.22.0] - 2026-03-17
 
 ### Added
