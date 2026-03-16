@@ -118,6 +118,21 @@ class DiscussionEngine:
             turn += 1
             last_speaker = speaker_name
 
+            # Facilitator warning at turn 10: force compromise
+            if turn == 10:
+                warning_msg = Message(
+                    role=MessageRole.USER,
+                    content=(
+                        "【ファシリテーターからの警告】議論が平行線になっています。"
+                        "各ペルソナは自分の当初の主張に固執せず、"
+                        "他者の提案（特に代替案）を一部受け入れて「具体的な折衷案」を提示してください。"
+                        "単純な主張の繰り返しは認めません。"
+                    ),
+                    speaker="ファシリテーター",
+                    timestamp=datetime.now(),
+                )
+                self._shared_memory.append(warning_msg)
+
             # Refresh state snapshot and notify display
             state = self._build_state(topic)
             state.turn_count = turn
