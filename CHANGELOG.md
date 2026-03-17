@@ -4,6 +4,13 @@
 
 ---
 
+## [0.27.0] - 2026-03-17
+
+### Added
+- `llm.py` — デバッグログ機能を追加。環境変数 `MAGI_DEBUG=1` を設定すると、LLMの生出力および各パース段階（RAW・CLEAN_RAW・JSON_STR・OPINION_RAW・OPINION_CLEANED など）をカレントディレクトリの `magi_debug.log` に記録する。Gemini / litellm-proxy 経由時の JSON 混入問題の原因特定に使用する。実行例: `MAGI_DEBUG=1 uv run magi -t "トピック"`
+
+---
+
 ## [0.26.0] - 2026-03-17
 
 ### Fixed

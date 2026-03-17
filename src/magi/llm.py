@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
 import re
 import time
 from typing import Optional
@@ -13,6 +15,25 @@ from rich.console import Console
 from magi.models import EmotionState, Message, MessageRole, PersonaResponse, Sentiment
 
 _console = Console(stderr=True)
+
+# ---------------------------------------------------------------------------
+# Debug logger — activated by setting MAGI_DEBUG=1 in the environment.
+# Writes raw LLM I/O to magi_debug.log in the current working directory.
+# ---------------------------------------------------------------------------
+_debug = os.environ.get("MAGI_DEBUG", "0") == "1"
+
+_log = logging.getLogger("magi.llm")
+if _debug:
+    _handler = logging.FileHandler("magi_debug.log", encoding="utf-8")
+    _handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
+    _log.addHandler(_handler)
+    _log.setLevel(logging.DEBUG)
+
+
+def _dbg(label: str, text: str) -> None:
+    """Write a labelled block to the debug log (no-op when MAGI_DEBUG != 1)."""
+    if _debug:
+        _log.debug("\n%s\n%s\n%s", f"=== {label} ===", text, "=" * 60)
 
 BASE_URL = "http://localhost:1234/v1"
 API_KEY = "lm-studio"
@@ -128,42 +149,59 @@ def _parse_persona_response(
     other_personas: list[str],
 ) -> PersonaResponse:
     """Parse a PersonaResponse from LLM output with robust error handling."""
+    _dbg(f"RAW [{persona_name}]", raw_text)
+
     # Strip thinking/reasoning blocks first — they can contain { } that confuse
     # the greedy JSON regex in _extract_json_block.
     clean_raw = _strip_thinking_blocks(raw_text)
+    _dbg(f"CLEAN_RAW [{persona_name}]", clean_raw)
+
     json_str = _extract_json_block(clean_raw) or _extract_json_block(raw_text)
+    _dbg(f"JSON_STR [{persona_name}]", json_str or "(none)")
 
     if json_str is None:
+        _dbg(f"FALLBACK [{persona_name}]", "json_str is None")
         return _build_fallback_response(persona_name, raw_text)
 
     try:
         data = json.loads(json_str)
     except json.JSONDecodeError as e:
         _console.print(f"[yellow]JSON decode error for {persona_name}: {e}[/yellow]")
+        _dbg(f"JSON_DECODE_ERROR [{persona_name}]", str(e))
         # Attempt to clean up common issues
         # Remove trailing commas
         cleaned = re.sub(r",\s*([}\]])", r"\1", json_str)
         try:
             data = json.loads(cleaned)
         except json.JSONDecodeError:
+            _dbg(f"FALLBACK [{persona_name}]", "json decode failed after cleanup")
             return _build_fallback_response(persona_name, raw_text)
 
+    opinion_raw = data.get("opinion", "")
+    _dbg(f"OPINION_RAW [{persona_name}]", repr(opinion_raw))
+
     # Validate and normalise required fields
-    opinion = data.get("opinion", "")
+    opinion = opinion_raw
     if not isinstance(opinion, str) or not opinion.strip():
         # JSON parsed but opinion is missing/empty — try regex extraction on raw
         m = re.search(r'"opinion"\s*:\s*"((?:[^"\\]|\\.)*)"', clean_raw, re.DOTALL)
         opinion = m.group(1).replace('\\"', '"').replace("\\n", "\n").strip() if m else ""
+        _dbg(f"OPINION_REGEX_RESCUE [{persona_name}]", repr(opinion))
     if not opinion:
+        _dbg(f"FALLBACK [{persona_name}]", "opinion empty after all attempts")
         return _build_fallback_response(persona_name, raw_text)
 
     # Strip JSON noise, thinking tags, code fences etc. that some models inject
-    opinion = _clean_opinion(opinion)
-    if not opinion:
+    opinion_cleaned = _clean_opinion(opinion)
+    _dbg(f"OPINION_CLEANED [{persona_name}]", repr(opinion_cleaned))
+    if not opinion_cleaned:
         # opinion field itself was JSON — re-extract from raw
         m = re.search(r'"opinion"\s*:\s*"((?:[^"\\]|\\.)*)"', clean_raw, re.DOTALL)
-        opinion = m.group(1).replace('\\"', '"').replace("\\n", "\n").strip() if m else ""
+        opinion_cleaned = m.group(1).replace('\\"', '"').replace("\\n", "\n").strip() if m else ""
+        _dbg(f"OPINION_CLEANED_RESCUE [{persona_name}]", repr(opinion_cleaned))
+    opinion = opinion_cleaned
     if not opinion:
+        _dbg(f"FALLBACK [{persona_name}]", "opinion empty after clean")
         return _build_fallback_response(persona_name, raw_text)
 
     # Post-process: remove self-referencing address patterns (セルフエコー対策)
