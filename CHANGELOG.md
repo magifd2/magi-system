@@ -4,6 +4,31 @@
 
 ---
 
+## [0.26.0] - 2026-03-17
+
+### Fixed
+- `llm.py` — `<think>` / `<thinking>` / `<reasoning>` ブロック内に `{}` が含まれると `_extract_json_block` の greedy regex がブロック全体を飲み込んでJSONパースが失敗する問題を修正。`_strip_thinking_blocks()` ヘルパーを追加し、JSON抽出前に除去するよう変更。
+- `llm.py` — `_build_fallback_response()` でJSONクリーン後に空文字になった場合、`raw_text[:500]`（生JSON）がそのまま `opinion` になる問題を修正。`"opinion"\s*:\s*"..."` の正規表現で値を直接抽出するフォールバックを追加。
+
+---
+
+## [0.25.0] - 2026-03-17
+
+### Added
+- `llm.py` — `_clean_opinion()` ヘルパーを追加。`opinion` フィールドに混入するJSONオブジェクト・配列・`<think>` タグ・コードフェンスを除去。Gemini / litellm-proxy 経由時の出力汚染に対応。
+
+### Changed
+- `llm.py` — `_build_fallback_response()` の既存JSON残骸除去処理を `_clean_opinion()` に統一。
+
+---
+
+## [0.24.1] - 2026-03-17
+
+### Added
+- `llm.py` — `PERSONA_TEMPERATURES` 辞書を追加し、ペルソナごとに temperature を個別設定。MELCHIOR=0.2（論理・確定的推論）、BALTHASAR=0.7（感情・多様な表現）、CASPER=0.4（実利・バランス）。未登録ペルソナのデフォルトは 0.5。
+
+---
+
 ## [0.24.0] - 2026-03-17
 
 ### Added
