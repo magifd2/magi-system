@@ -48,16 +48,7 @@ def _build_fallback_response(persona_name: str, raw_text: str) -> PersonaRespons
     _console.print(
         f"[yellow]Warning: Could not parse JSON from {persona_name}'s response. Using fallback.[/yellow]"
     )
-    # Strip JSON-looking blocks (including nested ones) iteratively
-    opinion = raw_text.strip()
-    prev = None
-    while prev != opinion:
-        prev = opinion
-        opinion = re.sub(r'\{[^{}]*\}', '', opinion, flags=re.DOTALL).strip()
-    # Also strip markdown code fences
-    opinion = re.sub(r'```(?:json)?\s*', '', opinion).strip()
-    # Collapse excess blank lines
-    opinion = re.sub(r'\n{3,}', '\n\n', opinion).strip()
+    opinion = _clean_opinion(raw_text)
     if not opinion:
         opinion = raw_text.strip()[:500]
 
@@ -67,6 +58,36 @@ def _build_fallback_response(persona_name: str, raw_text: str) -> PersonaRespons
         convergence_vote=False,
         convergence_reason="応答の解析に失敗したため、収束判断を保留します。",
     )
+
+
+def _clean_opinion(text: str) -> str:
+    """
+    Strip non-opinion noise from an extracted opinion string.
+
+    Handles:
+    - <think>...</think> blocks (Gemini / QwQ thinking mode)
+    - Nested JSON objects / arrays
+    - Markdown code fences
+    - Excess blank lines
+    """
+    # Remove thinking blocks (various tag styles)
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<thinking>.*?</thinking>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    # Remove JSON objects iteratively (handles nesting)
+    prev = None
+    while prev != text:
+        prev = text
+        text = re.sub(r"\{[^{}]*\}", "", text, flags=re.DOTALL)
+    # Remove JSON arrays iteratively
+    prev = None
+    while prev != text:
+        prev = text
+        text = re.sub(r"\[[^\[\]]*\]", "", text, flags=re.DOTALL)
+    # Remove markdown code fences
+    text = re.sub(r"```[a-z]*\s*", "", text)
+    # Collapse excess whitespace / blank lines
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
 
 def _parse_persona_response(
@@ -95,6 +116,11 @@ def _parse_persona_response(
     # Validate and normalise required fields
     opinion = data.get("opinion", "")
     if not isinstance(opinion, str) or not opinion.strip():
+        opinion = raw_text.strip()[:500]
+
+    # Strip JSON noise, thinking tags, code fences etc. that some models inject
+    opinion = _clean_opinion(opinion)
+    if not opinion:
         opinion = raw_text.strip()[:500]
 
     # Post-process: remove self-referencing address patterns (セルフエコー対策)
