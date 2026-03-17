@@ -325,7 +325,7 @@ class LLMClient:
                     temperature=PERSONA_TEMPERATURES.get(persona_name, 0.5),
                     presence_penalty=0.8,
                     frequency_penalty=0.8,
-                    max_tokens=1024,
+                    max_tokens=2048,
                 )
                 raw_text = response.choices[0].message.content or ""
                 return _parse_persona_response(persona_name, raw_text, other_personas)
