@@ -36,19 +36,37 @@ def _strip_thinking_blocks(text: str) -> str:
     return text.strip()
 
 
+def _find_json_with_opinion(text: str) -> Optional[str]:
+    """
+    Find the outermost JSON object that contains an "opinion" key.
+    Uses depth-tracking brace matching to handle nested objects correctly.
+    """
+    for start in (m.start() for m in re.finditer(r"\{", text)):
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    candidate = text[start : i + 1]
+                    if '"opinion"' in candidate:
+                        return candidate
+                    break
+    return None
+
+
 def _extract_json_block(text: str) -> Optional[str]:
     """Extract a JSON object from a text that might contain markdown code fences."""
-    # Try to find ```json ... ``` block
-    fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+    # Try to find ```json ... ``` block (greedy .* to capture the full object)
+    fence_match = re.search(r"```(?:json)?\s*(\{.*\})\s*```", text, re.DOTALL)
     if fence_match:
-        return fence_match.group(1)
+        candidate = fence_match.group(1)
+        if '"opinion"' in candidate:
+            return candidate
 
-    # Try to find a bare JSON object
-    brace_match = re.search(r"\{.*\}", text, re.DOTALL)
-    if brace_match:
-        return brace_match.group(0)
-
-    return None
+    # Find the outermost JSON object containing "opinion" via brace tracking
+    return _find_json_with_opinion(text)
 
 
 def _build_fallback_response(persona_name: str, raw_text: str) -> PersonaResponse:
@@ -56,15 +74,14 @@ def _build_fallback_response(persona_name: str, raw_text: str) -> PersonaRespons
     _console.print(
         f"[yellow]Warning: Could not parse JSON from {persona_name}'s response. Using fallback.[/yellow]"
     )
-    # Strip thinking blocks before cleaning
     text = _strip_thinking_blocks(raw_text)
-    opinion = _clean_opinion(text)
-    if not opinion:
-        # _clean_opinion removed everything (raw text was pure JSON).
-        # Try to extract the "opinion" value directly with regex.
-        m = re.search(r'"opinion"\s*:\s*"((?:[^"\\]|\\.)*)"', text, re.DOTALL)
-        if m:
-            opinion = m.group(1).replace('\\"', '"').replace("\\n", "\n").strip()
+    # Always try regex extraction of "opinion" value first (most reliable for pure-JSON responses)
+    m = re.search(r'"opinion"\s*:\s*"((?:[^"\\]|\\.)*)"', text, re.DOTALL)
+    if m:
+        opinion = m.group(1).replace('\\"', '"').replace("\\n", "\n").strip()
+    else:
+        # Fall back to cleaning the whole text
+        opinion = _clean_opinion(text)
     if not opinion:
         opinion = raw_text.strip()[:500]
 
@@ -134,12 +151,20 @@ def _parse_persona_response(
     # Validate and normalise required fields
     opinion = data.get("opinion", "")
     if not isinstance(opinion, str) or not opinion.strip():
-        opinion = raw_text.strip()[:500]
+        # JSON parsed but opinion is missing/empty — try regex extraction on raw
+        m = re.search(r'"opinion"\s*:\s*"((?:[^"\\]|\\.)*)"', clean_raw, re.DOTALL)
+        opinion = m.group(1).replace('\\"', '"').replace("\\n", "\n").strip() if m else ""
+    if not opinion:
+        return _build_fallback_response(persona_name, raw_text)
 
     # Strip JSON noise, thinking tags, code fences etc. that some models inject
     opinion = _clean_opinion(opinion)
     if not opinion:
-        opinion = raw_text.strip()[:500]
+        # opinion field itself was JSON — re-extract from raw
+        m = re.search(r'"opinion"\s*:\s*"((?:[^"\\]|\\.)*)"', clean_raw, re.DOTALL)
+        opinion = m.group(1).replace('\\"', '"').replace("\\n", "\n").strip() if m else ""
+    if not opinion:
+        return _build_fallback_response(persona_name, raw_text)
 
     # Post-process: remove self-referencing address patterns (セルフエコー対策)
     # e.g. "MELCHIOR、あなたの…" or "MELCHIOR、私は…" where persona_name == "MELCHIOR"
