@@ -4,6 +4,13 @@
 
 ---
 
+## [0.27.3] - 2026-03-17
+
+### Fixed
+- `display.py` — ヘッダーの「■ 議論収束」表示でRichマークアップタグが生テキストとして表示される問題を修正。`Text.append()` は markup を解釈しないため `Text.append_text(Text.from_markup(...))` に変更。
+
+---
+
 ## [0.27.2] - 2026-03-17
 
 ### Fixed

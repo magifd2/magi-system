@@ -151,7 +151,7 @@ class DiscussionDisplay:
         t.append("/3", style="dim")
 
         if state.is_converged:
-            t.append("   [bold green]■ 議論収束[/bold green]")
+            t.append_text(Text.from_markup("   [bold green]■ 議論収束[/bold green]"))
 
         return Panel(
             t,
