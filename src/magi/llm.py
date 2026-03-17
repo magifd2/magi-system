@@ -28,6 +28,14 @@ PERSONA_TEMPERATURES: dict[str, float] = {
 }
 
 
+def _strip_thinking_blocks(text: str) -> str:
+    """Remove <think>/<thinking>/<reasoning> blocks emitted by some models."""
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<thinking>.*?</thinking>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<reasoning>.*?</reasoning>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    return text.strip()
+
+
 def _extract_json_block(text: str) -> Optional[str]:
     """Extract a JSON object from a text that might contain markdown code fences."""
     # Try to find ```json ... ``` block
@@ -48,7 +56,15 @@ def _build_fallback_response(persona_name: str, raw_text: str) -> PersonaRespons
     _console.print(
         f"[yellow]Warning: Could not parse JSON from {persona_name}'s response. Using fallback.[/yellow]"
     )
-    opinion = _clean_opinion(raw_text)
+    # Strip thinking blocks before cleaning
+    text = _strip_thinking_blocks(raw_text)
+    opinion = _clean_opinion(text)
+    if not opinion:
+        # _clean_opinion removed everything (raw text was pure JSON).
+        # Try to extract the "opinion" value directly with regex.
+        m = re.search(r'"opinion"\s*:\s*"((?:[^"\\]|\\.)*)"', text, re.DOTALL)
+        if m:
+            opinion = m.group(1).replace('\\"', '"').replace("\\n", "\n").strip()
     if not opinion:
         opinion = raw_text.strip()[:500]
 
@@ -70,9 +86,8 @@ def _clean_opinion(text: str) -> str:
     - Markdown code fences
     - Excess blank lines
     """
-    # Remove thinking blocks (various tag styles)
-    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE)
-    text = re.sub(r"<thinking>.*?</thinking>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    # Remove thinking blocks
+    text = _strip_thinking_blocks(text)
     # Remove JSON objects iteratively (handles nesting)
     prev = None
     while prev != text:
@@ -96,7 +111,10 @@ def _parse_persona_response(
     other_personas: list[str],
 ) -> PersonaResponse:
     """Parse a PersonaResponse from LLM output with robust error handling."""
-    json_str = _extract_json_block(raw_text)
+    # Strip thinking/reasoning blocks first — they can contain { } that confuse
+    # the greedy JSON regex in _extract_json_block.
+    clean_raw = _strip_thinking_blocks(raw_text)
+    json_str = _extract_json_block(clean_raw) or _extract_json_block(raw_text)
 
     if json_str is None:
         return _build_fallback_response(persona_name, raw_text)
