@@ -189,18 +189,18 @@ magi-system/
 
 LLMクライアントの設定です。
 
-| 定数 / 設定 | デフォルト | 説明 |
-|------------|-----------|------|
-| `BASE_URL` | `http://localhost:1234/v1` | LLMエンドポイント |
-| `API_KEY` | `lm-studio` | APIキー |
-| `MODEL` | `qwen/qwen3-30b-a3b-2507` | 使用モデル |
+| 環境変数 / 設定 | デフォルト | 説明 |
+|----------------|-----------|------|
+| `MAGI_BASE_URL` | `http://localhost:1234/v1` | LLMエンドポイント |
+| `MAGI_API_KEY` | `lm-studio` | APIキー |
+| `MAGI_MODEL` | `qwen/qwen3-30b-a3b-2507` | 使用モデル |
 | `MAX_RETRIES` | `3` | APIエラー時のリトライ回数 |
 | `RETRY_DELAY` | `2.0` 秒 | リトライ間隔（試行ごとに線形増加） |
 | `PERSONA_TEMPERATURES` | MELCHIOR: `0.2` / BALTHASAR: `0.7` / CASPER: `0.4` | ペルソナ別 temperature |
 | `presence_penalty` | `0.8` | 話題の繰り返し抑制 |
 | `frequency_penalty` | `0.8` | 表現の繰り返し抑制 |
 | `max_tokens`（ペルソナ） | `4096` | ペルソナ応答の最大トークン数 |
-| `max_tokens`（レポート） | `4096` | 最終レポートの最大トークン数 |
+| `max_tokens`（レポート） | `8192` | 最終レポートの最大トークン数 |
 
 ## ライセンス
 
