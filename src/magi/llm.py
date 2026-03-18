@@ -35,9 +35,9 @@ def _dbg(label: str, text: str) -> None:
     if _debug:
         _log.debug("\n%s\n%s\n%s", f"=== {label} ===", text, "=" * 60)
 
-BASE_URL = "http://localhost:1234/v1"
-API_KEY = "lm-studio"
-MODEL = "qwen/qwen3-30b-a3b-2507"
+BASE_URL = os.environ.get("MAGI_BASE_URL", "http://localhost:1234/v1")
+API_KEY  = os.environ.get("MAGI_API_KEY",  "lm-studio")
+MODEL    = os.environ.get("MAGI_MODEL",    "qwen/qwen3-30b-a3b-2507")
 
 MAX_RETRIES = 3
 RETRY_DELAY = 2.0  # seconds
